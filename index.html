@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>ETF 포트폴리오 추적기</title>
     <!-- Chart.js for realtime charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Updated: Chart periods changed to 1D/5D/1M/3M/6M/YTD/ALL, multiple ETF input enabled -->
+    <!-- Updated: Chart.js realtime charts with 30s auto-update, direct API calls for KR/US -->
     <style>
         * {
             margin: 0;
@@ -733,7 +736,12 @@
     <button class="add-etf-btn" onclick="openAddEtfModal()">+</button>
     
     <script>
-        const PRICES_URL = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'prices.json';
+        // 캐시 방지: 매번 호출 시 새 타임스탬프 생성
+        function getPricesUrl() {
+            const base = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'prices.json';
+            return base + '?v=' + new Date().getTime();
+        }
+        
         let PRICES = {};
         let etfs = {};
         let currentTradeEtf = null;
@@ -753,7 +761,7 @@
         // prices.json 로드 (초기화용)
         async function loadPrices() {
             try {
-                const res = await fetch(PRICES_URL);
+                const res = await fetch(getPricesUrl());
                 const data = await res.json();
                 PRICES = data.prices || {};
             } catch (e) {
@@ -764,7 +772,7 @@
         // Historical 데이터 로드
         async function loadHistoricData() {
             try {
-                const res = await fetch(PRICES_URL);
+                const res = await fetch(getPricesUrl());
                 window.historicData = await res.json();
             } catch (e) {
                 console.error('Historical data 로드 실패:', e);
@@ -775,7 +783,7 @@
         // 모든 차트 초기화
         async function initAllCharts() {
             for (const ticker in etfs) {
-                renderChartWithChartJs(ticker, '1d');
+                await renderChartWithChartJs(ticker, '1d');
                 chartRanges[ticker] = '1d';
             }
         }
@@ -807,7 +815,7 @@
             renderSummary();
             renderEtfCards();
             // 차트도 함께 업데이트
-            redrawAllCharts();
+            await redrawAllCharts();
         }
         
         // Naver API에서 한국 ETF 가격 가져오기
@@ -1169,9 +1177,14 @@
         }
         
         // Chart.js 차트 렌더링/업데이트
-        function renderChartWithChartJs(ticker, range = '1d') {
+        async function renderChartWithChartJs(ticker, range = '1d') {
             const canvas = document.getElementById(`chart-${ticker}`);
             if (!canvas) return;
+            
+            // historical 데이터가 없으면 로드
+            if (!window.historicData) {
+                await loadHistoricData();
+            }
             
             const { dates, prices, avgCosts } = filterChartData(ticker, range);
             const currentPrice = PRICES[ticker]?.price || 0;
@@ -1251,16 +1264,10 @@
         async function initChart(ticker, range = '1d') {
             // 초기화 시 prices.json에서 historical 데이터 로드
             if (!window.historicData) {
-                try {
-                    const res = await fetch(PRICES_URL);
-                    window.historicData = await res.json();
-                } catch (e) {
-                    console.error('Historical data 로드 실패:', e);
-                    return;
-                }
+                await loadHistoricData();
             }
             
-            renderChartWithChartJs(ticker, range);
+            await renderChartWithChartJs(ticker, range);
         }
         
         // 기간 선택 변경 핸들러
@@ -1274,15 +1281,15 @@
             // 선택된 기간 저장
             chartRanges[ticker] = range;
             
-            // 차트 업데이트
-            renderChartWithChartJs(ticker, range);
+            // 차트 업데이트(비동기)
+            renderChartWithChartJs(ticker, range).catch(e => console.error('차트 업데이트 실패:', e));
         }
         
         // 차트 재렌더링 (실시간 가격 업데이트 시 호출)
-        function redrawAllCharts() {
+        async function redrawAllCharts() {
             for (const ticker in chartInstances) {
                 const range = chartRanges[ticker] || '1d';
-                renderChartWithChartJs(ticker, range);
+                await renderChartWithChartJs(ticker, range);
             }
         }
         
