@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ETF 포트폴리오 추적기</title>
-    <script src="https://s3.tradingview.com/tv.js"></script>
     <style>
         * {
             margin: 0;
@@ -268,8 +267,9 @@
         }
         
         .tradingview-widget-container {
-            height: 300px;
+            height: 400px;
             margin-bottom: 12px;
+            width: 100%;
         }
         
         .avg-price-bar {
@@ -712,40 +712,16 @@
     <div class="modal-overlay" id="addEtfModal">
         <div class="modal-content">
             <div class="modal-header">
-                <span>ETF 추가</span>
+                <span>ETF 추가 (복수 입력 가능)</span>
                 <button class="modal-close" onclick="closeAddEtfModal()">×</button>
             </div>
             
-            <div class="form-group">
-                <label class="form-label">ETF명</label>
-                <input type="text" id="etfName" class="form-input" placeholder="예: KODEX 200">
+            <div id="etfInputsContainer">
+                <!-- 동적으로 추가될 입력 필드 -->
             </div>
             
-            <div class="form-group">
-                <label class="form-label">티커</label>
-                <input type="text" id="etfTicker" class="form-input" placeholder="예: 367760 또는 SPY">
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">시장</label>
-                <select id="etfMarket" class="form-select">
-                    <option value="KR">국내 (KR)</option>
-                    <option value="US">해외 (US)</option>
-                </select>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">초기 단가</label>
-                    <input type="number" id="initPrice" class="form-input" placeholder="예: 31500" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">초기 수량</label>
-                    <input type="number" id="initQty" class="form-input" placeholder="예: 10" step="1">
-                </div>
-            </div>
-            
-            <button class="btn-confirm" onclick="confirmAddEtf()">ETF 추가</button>
+            <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="addEtfInputField()">+ 다른 ETF 추가</button>
+            <button class="btn-confirm" onclick="confirmAddMultipleEtf()">모두 추가</button>
         </div>
     </div>
     
@@ -798,6 +774,7 @@
         }
         
         // 계산함수: 보유수량, 평균단가 등
+        // 초기단가/초기수량은 보유수량에만 포함, 평가손익은 거래내역만 기준
         function calculateMetrics(ticker) {
             const etf = etfs[ticker];
             if (!etf) return null;
@@ -805,8 +782,8 @@
             const price = PRICES[ticker]?.price || 0;
             const trades = getTrades(ticker);
             
-            let totalBuyQty = 0;
-            let totalBuyCost = 0;
+            let totalBuyQty = 0;  // 거래 기반 매수
+            let totalBuyCost = 0;  // 거래 기반 매수금액
             let totalSellQty = 0;
             let realizedGainLoss = 0;
             
@@ -814,16 +791,15 @@
             let qtyBuffer = [];
             let priceBuffer = [];
             
-            // 초기 수량/단가 처리
+            // 초기 수량/단가 처리 - 보유수량에만 포함
             if (etf.initQty && etf.initPrice) {
                 for (let i = 0; i < etf.initQty; i++) {
                     qtyBuffer.push(1);
                     priceBuffer.push(etf.initPrice);
                 }
-                totalBuyCost += etf.initQty * etf.initPrice;
             }
             
-            // 거래 처리
+            // 거래 처리 - 평가손익 계산용
             for (const trade of trades) {
                 if (trade.type === 'buy') {
                     for (let i = 0; i < trade.qty; i++) {
@@ -846,8 +822,10 @@
             }
             
             const holdingQty = qtyBuffer.length;
-            const avgCost = holdingQty > 0 ? totalBuyCost / (totalBuyQty + (etf.initQty || 0)) : 0;
+            // 평균단가는 거래 기반으로만 계산 (초기단가는 제외)
+            const avgCost = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0;
             const evalAmount = holdingQty * price;
+            // 평가손익은 거래 기반 평균단가만 사용
             const costAmount = holdingQty * avgCost;
             const gainLoss = evalAmount - costAmount;
             const returnRate = costAmount > 0 ? (gainLoss / costAmount) * 100 : 0;
@@ -859,7 +837,7 @@
                 gainLoss,
                 returnRate,
                 realizedGainLoss,
-                totalBuyCost: totalBuyQty + (etf.initQty || 0) > 0 ? totalBuyCost : 0
+                totalBuyCost: totalBuyCost  // 거래 기반만
             };
         }
         
@@ -957,16 +935,16 @@
                     
                     <div class="chart-section">
                         <div class="chart-period-buttons">
-                            <button class="btn-period active" onclick="updateChart('${ticker}', '1W')">1W</button>
-                            <button class="btn-period" onclick="updateChart('${ticker}', '1M')">1M</button>
-                            <button class="btn-period" onclick="updateChart('${ticker}', '3M')">3M</button>
-                            <button class="btn-period" onclick="updateChart('${ticker}', '6M')">6M</button>
-                            <button class="btn-period" onclick="updateChart('${ticker}', '1Y')">1Y</button>
+                            <button class="btn-period active" onclick="updateChart('${ticker}', '1d')">1D</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '5d')">5D</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '1m')">1M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '3m')">3M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '6m')">6M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', 'ytd')">YTD</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', 'all')">ALL</button>
                         </div>
                         <div class="chart-container">
-                            <div class="tradingview-widget-container">
-                                <div id="chart-${ticker}"></div>
-                            </div>
+                            <iframe id="chart-${ticker}" class="tradingview-widget-container" frameborder="0" allowfullscreen></iframe>
                         </div>
                         <div class="avg-price-bar">━━ 평균매수가 ${metrics.avgCost ? metrics.avgCost.toLocaleString('en-US', {maximumFractionDigits: 2}) : '-'} (현재가 대비 ${price > 0 ? ((price - metrics.avgCost) / metrics.avgCost * 100).toFixed(2) : '0'}%)</div>
                     </div>
@@ -985,7 +963,7 @@
                 container.appendChild(card);
                 
                 // 차트 초기화
-                initChart(ticker, '1W');
+                initChart(ticker, '1d');
                 
                 // 거래내역 렌더링
                 renderTrades(ticker);
@@ -1048,8 +1026,8 @@
             return Math.max(qty, 0);
         }
         
-        // TradingView 차트 초기화
-        function initChart(ticker, period) {
+        // TradingView iframe 차트 초기화
+        function initChart(ticker, range = '1d') {
             const etf = etfs[ticker];
             let symbol;
             
@@ -1059,33 +1037,22 @@
                 symbol = `NASDAQ:${ticker}`;
             }
             
-            const interval = period === '1M' || period === '3M' ? 'D' : 'W';
-            
-            new TradingView.widget({
-                autosize: true,
-                symbol: symbol,
-                interval: interval,
-                timezone: "Asia/Seoul",
-                theme: "light",
-                style: "1",
-                locale: "kr",
-                enable_publishing: false,
-                hide_side_toolbar: true,
-                hide_legend: true,
-                container_id: `chart-${ticker}`
-            });
+            const iframe = document.getElementById(`chart-${ticker}`);
+            if (iframe) {
+                const url = `https://www.tradingview.com/widgetembed/?symbol=${symbol}&interval=D&theme=light&style=1&locale=kr&range=${range}&hide_side_toolbar=1&allow_symbol_change=0&hide_legend=0&hide_volume=0`;
+                iframe.src = url;
+            }
         }
         
-        function updateChart(ticker, period) {
+        function updateChart(ticker, range) {
             // 버튼 상태 업데이트
             event.target.parentElement.querySelectorAll('.btn-period').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
             
-            // 차트 재로드 (간단히: 차트 컨테이너 재초기화)
-            document.getElementById(`chart-${ticker}`).innerHTML = '';
-            initChart(ticker, period);
+            // 차트 URL 업데이트
+            initChart(ticker, range);
         }
         
         // 거래 모달 열기
@@ -1174,47 +1141,119 @@
         // ETF 추가 모달
         function openAddEtfModal() {
             document.getElementById('addEtfModal').classList.add('active');
+            document.getElementById('etfInputsContainer').innerHTML = '';
+            addEtfInputField();  // 첫 번째 입력 필드 추가
         }
         
-        function closeAddEtfModal() {
-            document.getElementById('addEtfModal').classList.remove('active');
-            document.getElementById('etfName').value = '';
-            document.getElementById('etfTicker').value = '';
-            document.getElementById('etfMarket').value = 'KR';
-            document.getElementById('initPrice').value = '';
-            document.getElementById('initQty').value = '';
-        }
-        
-        function confirmAddEtf() {
-            const name = document.getElementById('etfName').value;
-            const ticker = document.getElementById('etfTicker').value.toUpperCase();
-            const market = document.getElementById('etfMarket').value;
-            const initPrice = parseFloat(document.getElementById('initPrice').value) || 0;
-            const initQty = parseInt(document.getElementById('initQty').value) || 0;
+        function addEtfInputField() {
+            const container = document.getElementById('etfInputsContainer');
+            const fieldCount = container.children.length + 1;
             
-            if (!name || !ticker || !initPrice || !initQty) {
-                showToast('모든 필드를 입력해주세요', 'error');
+            const fieldHtml = `
+                <div class="etf-input-field" data-field="${fieldCount}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb;">
+                        <h4 style="margin: 0; font-size: 13px; color: #6b7280;">ETF #${fieldCount}</h4>
+                        ${fieldCount > 1 ? `<button class="btn btn-danger" style="padding: 4px 8px;" onclick="removeEtfInputField(${fieldCount})">삭제</button>` : ''}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">ETF명</label>
+                        <input type="text" class="etf-name-input form-input" placeholder="예: KODEX 200">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">티커</label>
+                        <input type="text" class="etf-ticker-input form-input" placeholder="예: 367760 또는 SPY">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">시장</label>
+                        <select class="etf-market-input form-select">
+                            <option value="KR">국내 (KR)</option>
+                            <option value="US">해외 (US)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">초기 단가</label>
+                            <input type="number" class="etf-price-input form-input" placeholder="예: 31500" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">초기 수량</label>
+                            <input type="number" class="etf-qty-input form-input" placeholder="예: 10" step="1">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const div = document.createElement('div');
+            div.innerHTML = fieldHtml;
+            container.appendChild(div.firstElementChild);
+        }
+        
+        function removeEtfInputField(fieldCount) {
+            document.querySelector(`[data-field="${fieldCount}"]`)?.remove();
+        }
+        
+        function confirmAddMultipleEtf() {
+            const fields = document.querySelectorAll('.etf-input-field');
+            let hasError = false;
+            const newEtfs = [];
+            
+            fields.forEach((field, idx) => {
+                const name = field.querySelector('.etf-name-input').value.trim();
+                const ticker = field.querySelector('.etf-ticker-input').value.trim().toUpperCase();
+                const market = field.querySelector('.etf-market-input').value;
+                const initPrice = parseFloat(field.querySelector('.etf-price-input').value) || 0;
+                const initQty = parseInt(field.querySelector('.etf-qty-input').value) || 0;
+                
+                if (!name || !ticker || !initPrice || !initQty) {
+                    showToast(`ETF #${idx + 1}: 모든 필드를 입력해주세요`, 'error');
+                    hasError = true;
+                    return;
+                }
+                
+                if (etfs[ticker]) {
+                    showToast(`${ticker}: 이미 존재하는 ETF입니다`, 'error');
+                    hasError = true;
+                    return;
+                }
+                
+                newEtfs.push({
+                    ticker,
+                    name,
+                    market,
+                    initPrice,
+                    initQty
+                });
+            });
+            
+            if (hasError || newEtfs.length === 0) {
                 return;
             }
             
-            if (etfs[ticker]) {
-                showToast('이미 존재하는 ETF입니다', 'error');
-                return;
-            }
-            
-            etfs[ticker] = {
-                name,
-                market,
-                initPrice,
-                initQty,
-                trades: []
-            };
+            // 모든 ETF 추가
+            newEtfs.forEach(item => {
+                etfs[item.ticker] = {
+                    name: item.name,
+                    market: item.market,
+                    initPrice: item.initPrice,
+                    initQty: item.initQty,
+                    trades: []
+                };
+            });
             
             saveEtfsToLocalStorage();
             renderSummary();
             renderEtfCards();
             closeAddEtfModal();
-            showToast('ETF가 추가되었습니다. GitHub tickers.json에 수동으로 추가해주세요', 'success');
+            showToast(`${newEtfs.length}개 ETF가 추가되었습니다. GitHub tickers.json에도 추가해주세요`, 'success');
+        }
+        
+        function closeAddEtfModal() {
+            document.getElementById('addEtfModal').classList.remove('active');
+            document.getElementById('etfInputsContainer').innerHTML = '';
         }
         
         function deleteEtf(ticker) {
