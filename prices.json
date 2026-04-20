@@ -1,1 +1,28 @@
-{"updated": "", "prices": {}}
+{
+  "updated": "2026-04-20 17:00 KST",
+  "historic": [
+    {
+      "date": "2026-04-20",
+      "time": "17:00",
+      "prices": {
+        "367760": {
+          "market": "KR",
+          "name": "KODEX 200",
+          "price": 33200,
+          "prev": 32800,
+          "currency": "KRW",
+          "ok": true
+        },
+        "SPY": {
+          "market": "US",
+          "name": "SPDR S&P 500",
+          "price": 580.5,
+          "prev": 578.0,
+          "currency": "USD",
+          "ok": true
+        }
+      }
+    }
+  ]
+}
+
