@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="-1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>ETF 포트폴리오 추적기</title>
+    <!-- Chart.js for realtime charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- v2.1: Chart.js realtime charts with 30s auto-update, direct API calls -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+        }
+        
+        nav {
+            position: sticky;
+            top: 0;
+            height: 54px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        nav h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        nav > div {
+            margin-left: auto;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        
+        .container {
+            max-width: 860px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        /* 포트폴리오 요약 */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .summary-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .summary-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .summary-subtext {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+        
+        /* ETF 카드 */
+        .etf-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .etf-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .etf-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .etf-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .badge {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .badge-ticker {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge-market {
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .badge-realtime {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .etf-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            background: white;
+        }
+        
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+        
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+        
+        .btn:hover {
+            background-color: #f3f4f6;
+        }
+        
+        /* 가격 섹션 */
+        .price-section {
+            padding: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .price-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .price-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        
+        .price-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .price-change {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        .price-change.positive {
+            color: #1D9E75;
+        }
+        
+        .price-change.negative {
+            color: #E24B4A;
+        }
+        
+        /* 차트 섹션 */
+        .chart-section {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .chart-period-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            justify-content: center;
+        }
+        
+        .btn-period {
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn-period.active {
+            background-color: #1D9E75;
+            color: white;
+            border-color: #1D9E75;
+        }
+        
+        .btn-period:hover {
+            border-color: #1D9E75;
+            color: #1D9E75;
+        }
+        
+        .chart-container {
+            margin-bottom: 12px;
+            height: 350px;
+            position: relative;
+        }
+        
+        .avg-price-bar {
+            padding: 8px 12px;
+            background-color: #f3f4f6;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #6b7280;
+            text-align: center;
+        }
+        
+        /* 거래내역 섹션 */
+        .trades-section {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .trades-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .trades-header-left {
+            color: #1f2937;
+        }
+        
+        .trades-header-right {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .trades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .trade-item {
+            display: flex;
+            padding: 10px;
+            background-color: #f9fafb;
+            border-radius: 6px;
+            border-left: 3px solid #d1d5db;
+        }
+        
+        .trade-badge {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            margin-right: 10px;
+            font-size: 11px;
+        }
+        
+        .trade-badge-buy {
+            background-color: #ef4444;
+        }
+        
+        .trade-badge-sell {
+            background-color: #1D9E75;
+        }
+        
+        .trade-content {
+            flex: 1;
+        }
+        
+        .trade-top {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .trade-action {
+            font-weight: 600;
+        }
+        
+        .trade-date {
+            color: #9ca3af;
+        }
+        
+        .trade-middle {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .trade-calc {
+            color: #6b7280;
+        }
+        
+        .trade-amount {
+            font-weight: 600;
+        }
+        
+        .trade-amount-buy {
+            color: #ef4444;
+        }
+        
+        .trade-amount-sell {
+            color: #1D9E75;
+        }
+        
+        .trade-bottom {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        
+        .trade-delete {
+            color: #ef4444;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .trade-delete:hover {
+            text-decoration: underline;
+        }
+        
+        /* 모달 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            max-width: 400px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #9ca3af;
+        }
+        
+        .modal-body {
+            padding: 16px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 12px;
+        }
+        
+        .form-label {
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #1f2937;
+        }
+        
+        .form-input {
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .btn-confirm {
+            width: 100%;
+            padding: 10px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-confirm:hover {
+            background-color: #2563eb;
+        }
+        
+        .trade-type-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .trade-type-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .trade-type-btn.active {
+            background-color: #1D9E75;
+            color: white;
+            border-color: #1D9E75;
+        }
+        
+        .preview {
+            padding: 10px;
+            background-color: #f3f4f6;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+        
+        /* 추가 ETF 모달 */
+        .etf-input-field {
+            background-color: #f9fafb;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .etf-input-field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .etf-input-field-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .etf-input-field-delete {
+            background: none;
+            border: none;
+            color: #ef4444;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        
+        .etf-input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .etf-input-row.full {
+            grid-template-columns: 1fr;
+        }
+        
+        /* 추가 버튼 */
+        .add-etf-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            transition: all 0.2s;
+            z-index: 50;
+        }
+        
+        .add-etf-btn:hover {
+            background-color: #2563eb;
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.6);
+            transform: scale(1.1);
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            font-size: 13px;
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .toast.success {
+            border-left: 4px solid #1D9E75;
+            color: #1D9E75;
+        }
+        
+        .toast.error {
+            border-left: 4px solid #ef4444;
+            color: #ef4444;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1>📈 ETF 포트폴리오</h1>
+        <div>v2.1 (Real-time 차트)</div>
+    </nav>
+    
+    <div class="container">
+        <!-- 포트폴리오 요약 -->
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">총 매입금액</div>
+                <div class="summary-value" id="totalPurchase">₩0</div>
+                <div class="summary-subtext">초기+거래 기준</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">평가금액</div>
+                <div class="summary-value" id="totalEval">₩0</div>
+                <div class="summary-subtext">현재 시세 기준</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">평가손익</div>
+                <div class="summary-value" id="totalGainLoss">+₩0</div>
+                <div class="summary-subtext" id="totalReturnRate">+0.00%</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">실현손익</div>
+                <div class="summary-value" id="totalRealizedGainLoss">₩0</div>
+                <div class="summary-subtext">매도 수익</div>
+            </div>
+        </div>
+        
+        <!-- ETF 카드 목록 -->
+        <div id="etfCardsContainer"></div>
+    </div>
+    
+    <!-- 거래 추가 모달 -->
+    <div class="modal-overlay" id="tradeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>거래 추가</span>
+                <button class="modal-close" onclick="closeTradeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="trade-type-buttons">
+                    <button class="trade-type-btn active" data-type="buy" onclick="switchTradeType('buy')">매수</button>
+                    <button class="trade-type-btn" data-type="sell" onclick="switchTradeType('sell')">매도</button>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">단가</label>
+                    <input type="number" id="tradePrice" class="form-input" oninput="updatePreview()">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">수량</label>
+                    <input type="number" id="tradeQty" class="form-input" oninput="updatePreview()">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">거래날짜</label>
+                    <input type="date" id="tradeDate" class="form-input">
+                </div>
+                
+                <div class="preview" id="tradePreview">미리보기</div>
+                
+                <button class="btn-confirm" onclick="confirmTrade()">거래 추가</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ETF 추가 모달 -->
+    <div class="modal-overlay" id="addEtfModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>ETF 추가 (복수 입력 가능)</span>
+                <button class="modal-close" onclick="closeAddEtfModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="etfInputsContainer"></div>
+                <button class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" onclick="addEtfInputField()">+ 다른 ETF 추가</button>
+                <button class="btn-confirm" onclick="confirmAddMultipleEtf()">모두 추가</button>
+            </div>
+        </div>
+    </div>
+    
+    <button class="add-etf-btn" onclick="openAddEtfModal()">+</button>
+    
+    <script>
+        // 캐시 방지: 매번 호출 시 새 타임스탬프 생성
+        function getPricesUrl() {
+            const base = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'prices.json';
+            return base + '?v=' + new Date().getTime();
+        }
+        
+        let PRICES = {};
+        let etfs = {};
+        let currentTradeEtf = null;
+        let currentTradeType = 'buy';
+        
+        // 초기화
+        async function init() {
+            await loadPrices();
+            await loadHistoricData();
+            loadEtfsFromLocalStorage();
+            renderSummary();
+            renderEtfCards();
+            await initAllCharts();
+            setTradeDate();
+        }
+        
+        // prices.json 로드 (초기화용)
+        async function loadPrices() {
+            try {
+                const res = await fetch(getPricesUrl());
+                const data = await res.json();
+                PRICES = data.prices || {};
+            } catch (e) {
+                console.error('prices.json 로드 실패:', e);
+            }
+        }
+        
+        // Historical 데이터 로드
+        async function loadHistoricData() {
+            try {
+                const res = await fetch(getPricesUrl());
+                window.historicData = await res.json();
+            } catch (e) {
+                console.error('Historical data 로드 실패:', e);
+                window.historicData = { historic: [] };
+            }
+        }
+        
+        // localStorage에서 ETF 목록 불러오기
+        function loadEtfsFromLocalStorage() {
+            const stored = localStorage.getItem('etfs');
+            if (stored) {
+                etfs = JSON.parse(stored);
+            }
+        }
+        
+        // localStorage에 ETF 목록 저장
+        function saveEtfsToLocalStorage() {
+            localStorage.setItem('etfs', JSON.stringify(etfs));
+        }
+        
+        // 거래내역 가져오기
+        function getTrades(ticker) {
+            if (!etfs[ticker]) return [];
+            return etfs[ticker].trades || [];
+        }
+        
+        // 계산함수: 보유수량, 평균단가 등
+        function calculateMetrics(ticker) {
+            const etf = etfs[ticker];
+            if (!etf) return null;
+            
+            const price = PRICES[ticker]?.price || 0;
+            const trades = getTrades(ticker);
+            
+            let totalBuyQty = 0;
+            let totalBuyCost = 0;
+            let totalSellQty = 0;
+            let realizedGainLoss = 0;
+            
+            let qtyBuffer = [];
+            let priceBuffer = [];
+            
+            if (etf.initQty && etf.initPrice) {
+                for (let i = 0; i < etf.initQty; i++) {
+                    qtyBuffer.push(1);
+                    priceBuffer.push(etf.initPrice);
+                }
+            }
+            
+            for (const trade of trades) {
+                if (trade.type === 'buy') {
+                    for (let i = 0; i < trade.qty; i++) {
+                        qtyBuffer.push(1);
+                        priceBuffer.push(trade.price);
+                    }
+                    totalBuyCost += trade.qty * trade.price;
+                    totalBuyQty += trade.qty;
+                } else {
+                    for (let i = 0; i < trade.qty; i++) {
+                        if (priceBuffer.length > 0) {
+                            const buyPrice = priceBuffer.shift();
+                            qtyBuffer.shift();
+                            realizedGainLoss += trade.price - buyPrice;
+                        }
+                    }
+                    totalSellQty += trade.qty;
+                }
+            }
+            
+            const holdingQty = qtyBuffer.length;
+            const avgCost = totalBuyQty > 0 ? totalBuyCost / totalBuyQty : 0;
+            const evalAmount = holdingQty * price;
+            const costAmount = holdingQty * avgCost;
+            const gainLoss = evalAmount - costAmount;
+            const returnRate = costAmount > 0 ? (gainLoss / costAmount) * 100 : 0;
+            
+            return {
+                holdingQty,
+                avgCost,
+                evalAmount,
+                gainLoss,
+                returnRate,
+                realizedGainLoss,
+                totalBuyCost
+            };
+        }
+        
+        // 포트폴리오 요약 렌더링
+        function renderSummary() {
+            let totalPurchase = 0;
+            let totalEval = 0;
+            let totalGainLoss = 0;
+            let totalRealizedGainLoss = 0;
+            
+            for (const ticker in etfs) {
+                const metrics = calculateMetrics(ticker);
+                if (metrics) {
+                    totalPurchase += metrics.totalBuyCost;
+                    totalEval += metrics.evalAmount;
+                    totalGainLoss += metrics.gainLoss;
+                    totalRealizedGainLoss += metrics.realizedGainLoss;
+                }
+            }
+            
+            const returnRate = totalPurchase > 0 ? (totalGainLoss / totalPurchase) * 100 : 0;
+            
+            document.getElementById('totalPurchase').textContent = `₩${totalPurchase.toLocaleString('ko-KR', {maximumFractionDigits: 0})}`;
+            document.getElementById('totalEval').textContent = `₩${totalEval.toLocaleString('ko-KR', {maximumFractionDigits: 0})}`;
+            document.getElementById('totalGainLoss').innerHTML = `<span style="color: ${totalGainLoss >= 0 ? '#1D9E75' : '#E24B4A'}">${totalGainLoss >= 0 ? '+' : ''}₩${totalGainLoss.toLocaleString('ko-KR', {maximumFractionDigits: 0})}</span>`;
+            document.getElementById('totalReturnRate').innerHTML = `<span style="color: ${returnRate >= 0 ? '#1D9E75' : '#E24B4A'}">${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(2)}%</span>`;
+            document.getElementById('totalRealizedGainLoss').innerHTML = `<span style="color: ${totalRealizedGainLoss >= 0 ? '#1D9E75' : '#E24B4A'}">${totalRealizedGainLoss >= 0 ? '+' : ''}₩${totalRealizedGainLoss.toLocaleString('ko-KR', {maximumFractionDigits: 0})}</span>`;
+        }
+        
+        // ETF 카드 렌더링
+        function renderEtfCards() {
+            const container = document.getElementById('etfCardsContainer');
+            container.innerHTML = '';
+            
+            for (const ticker in etfs) {
+                const etf = etfs[ticker];
+                const metrics = calculateMetrics(ticker);
+                const price = PRICES[ticker]?.price || 0;
+                const prevPrice = PRICES[ticker]?.prev || price;
+                const name = PRICES[ticker]?.name || etf.name || ticker;
+                const changeRate = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+                const changeAmount = price - prevPrice;
+                
+                const card = document.createElement('div');
+                card.className = 'etf-card';
+                card.innerHTML = `
+                    <div class="etf-header">
+                        <div class="etf-title">
+                            <span class="etf-name">${name}</span>
+                            <span class="badge badge-ticker">${ticker}</span>
+                            <span class="badge badge-market">${etf.market === 'KR' ? '국내' : '해외'}</span>
+                            <span class="badge badge-realtime">실시간</span>
+                        </div>
+                        <div class="etf-actions">
+                            <button class="btn btn-primary" onclick="openTradeModal('${ticker}')">+ 거래추가</button>
+                            <button class="btn btn-danger" onclick="deleteEtf('${ticker}')">삭제</button>
+                        </div>
+                    </div>
+                    
+                    <div class="price-section">
+                        <div class="price-info">
+                            <div class="price-label">현재가</div>
+                            <div class="price-value">${price.toLocaleString('en-US', {maximumFractionDigits: 2})}</div>
+                            <div class="price-change ${changeAmount >= 0 ? 'positive' : 'negative'}">
+                                ${changeAmount >= 0 ? '▲' : '▼'} ${Math.abs(changeAmount).toLocaleString('en-US', {maximumFractionDigits: 2})} (${changeRate >= 0 ? '+' : ''}${changeRate.toFixed(2)}%)
+                            </div>
+                        </div>
+                        <div class="price-info">
+                            <div class="price-label">보유수량 / 평가금액</div>
+                            <div class="price-value">${metrics?.holdingQty || 0} / ₩${(metrics?.evalAmount || 0).toLocaleString('ko-KR', {maximumFractionDigits: 0})}</div>
+                            <div class="price-change ${(metrics?.gainLoss || 0) >= 0 ? 'positive' : 'negative'}">
+                                ${(metrics?.gainLoss || 0) >= 0 ? '+' : ''}₩${(metrics?.gainLoss || 0).toLocaleString('ko-KR', {maximumFractionDigits: 0})} (${(metrics?.returnRate || 0) >= 0 ? '+' : ''}${(metrics?.returnRate || 0).toFixed(2)}%)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-section">
+                        <div class="chart-period-buttons">
+                            <button class="btn-period active" onclick="updateChart('${ticker}', '1d')">1D</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '5d')">5D</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '1m')">1M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '3m')">3M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', '6m')">6M</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', 'ytd')">YTD</button>
+                            <button class="btn-period" onclick="updateChart('${ticker}', 'all')">ALL</button>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px;">
+                            <canvas id="chart-${ticker}"></canvas>
+                        </div>
+                        <div class="avg-price-bar">━━ 평균매수가 ${metrics.avgCost ? metrics.avgCost.toLocaleString('en-US', {maximumFractionDigits: 2}) : '-'} (현재가 대비 ${price > 0 ? ((price - metrics.avgCost) / metrics.avgCost * 100).toFixed(2) : '0'}%)</div>
+                    </div>
+                    
+                    <div class="trades-section">
+                        <div class="trades-header">
+                            <div class="trades-header-left">거래내역 (${getTrades(ticker).length}건)</div>
+                            <div class="trades-header-right" style="background-color: ${metrics.realizedGainLoss >= 0 ? '#E1F5EE' : '#FCEBEB'}; color: ${metrics.realizedGainLoss >= 0 ? '#1D9E75' : '#E24B4A'}">
+                                실현손익 ${metrics.realizedGainLoss >= 0 ? '+' : ''}${metrics.realizedGainLoss.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                            </div>
+                        </div>
+                        <div id="trades-${ticker}"></div>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+                renderTrades(ticker);
+            }
+        }
+        
+        // 거래내역 렌더링
+        function renderTrades(ticker) {
+            const tradesContainer = document.getElementById(`trades-${ticker}`);
+            const trades = getTrades(ticker);
+            
+            if (trades.length === 0) {
+                tradesContainer.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 20px;">거래내역이 없습니다</div>';
+                return;
+            }
+            
+            tradesContainer.innerHTML = trades.map((trade, idx) => {
+                const isBuy = trade.type === 'buy';
+                return `
+                    <div class="trade-item">
+                        <div class="trade-badge ${isBuy ? 'trade-badge-buy' : 'trade-badge-sell'}">
+                            ${isBuy ? '매' : '판'}
+                        </div>
+                        <div class="trade-content">
+                            <div class="trade-top">
+                                <span class="trade-action">${isBuy ? '매수' : '매도'} ${trade.qty}주</span>
+                                <span class="trade-date">${trade.date}</span>
+                            </div>
+                            <div class="trade-middle">
+                                <span class="trade-calc">${trade.price.toLocaleString('en-US', {maximumFractionDigits: 2})} × ${trade.qty}주</span>
+                                <span class="trade-amount ${isBuy ? 'trade-amount-buy' : 'trade-amount-sell'}">
+                                    ${isBuy ? '-' : '+'}₩${(trade.price * trade.qty).toLocaleString('en-US', {maximumFractionDigits: 0})}
+                                </span>
+                            </div>
+                            <div class="trade-bottom">
+                                <span class="trade-quantity">누적 ${calculateHoldingQtyAfterTrade(ticker, idx)}주 보유</span>
+                                <span class="trade-delete" onclick="deleteTrade('${ticker}', ${idx})">삭제</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 거래 후 보유수량 계산
+        function calculateHoldingQtyAfterTrade(ticker, upToIndex) {
+            const etf = etfs[ticker];
+            const trades = getTrades(ticker);
+            let qty = etf.initQty || 0;
+            
+            for (let i = 0; i <= upToIndex && i < trades.length; i++) {
+                if (trades[i].type === 'buy') {
+                    qty += trades[i].qty;
+                } else {
+                    qty -= trades[i].qty;
+                }
+            }
+            
+            return Math.max(qty, 0);
+        }
+        
+        // Chart.js 인스턴스 저장
+        const chartInstances = {};
+        const chartRanges = {};
+        
+        // 기간별 데이터 필터링
+        function filterChartData(ticker, range) {
+            if (!window.historicData) return { dates: [], prices: [], avgCosts: [] };
+            
+            const now = new Date();
+            let startDate = new Date();
+            let daysBack = 1;
+            
+            switch(range) {
+                case '1d': daysBack = 1; break;
+                case '5d': daysBack = 5; break;
+                case '1m': daysBack = 30; break;
+                case '3m': daysBack = 90; break;
+                case '6m': daysBack = 180; break;
+                case 'ytd': startDate = new Date(now.getFullYear(), 0, 1); daysBack = null; break;
+                case 'all': daysBack = null; break;
+            }
+            
+            if (daysBack) {
+                startDate.setDate(now.getDate() - daysBack);
+            }
+            
+            const historic = window.historicData.historic || [];
+            const dates = [];
+            const prices = [];
+            const avgCosts = [];
+            
+            for (const entry of historic) {
+                const entryDate = new Date(entry.date);
+                if (entryDate >= startDate) {
+                    const priceData = entry.prices[ticker];
+                    if (priceData && priceData.price) {
+                        dates.push(entry.date);
+                        prices.push(priceData.price);
+                        
+                        const metrics = calculateMetrics(ticker);
+                        avgCosts.push(metrics?.avgCost || 0);
+                    }
+                }
+            }
+            
+            return { dates, prices, avgCosts };
+        }
+        
+        // Chart.js 차트 렌더링
+        async function renderChartWithChartJs(ticker, range = '1d') {
+            const canvas = document.getElementById(`chart-${ticker}`);
+            if (!canvas) return;
+            
+            if (!window.historicData) {
+                await loadHistoricData();
+            }
+            
+            const { dates, prices, avgCosts } = filterChartData(ticker, range);
+            const currentPrice = PRICES[ticker]?.price || 0;
+            
+            if (chartInstances[ticker]) {
+                chartInstances[ticker].destroy();
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            chartInstances[ticker] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: `${ticker} 가격`,
+                            data: prices,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: '평균 매수가',
+                            data: avgCosts,
+                            borderColor: '#f97316',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grace: '5%',
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString('en-US', {maximumFractionDigits: 0});
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 차트 초기화
+        async function initChart(ticker, range = '1d') {
+            if (!window.historicData) {
+                await loadHistoricData();
+            }
+            
+            await renderChartWithChartJs(ticker, range);
+        }
+        
+        // 모든 차트 초기화
+        async function initAllCharts() {
+            for (const ticker in etfs) {
+                await renderChartWithChartJs(ticker, '1d');
+                chartRanges[ticker] = '1d';
+            }
+        }
+        
+        // 실시간 가격 업데이트
+        async function fetchRealtimePrices() {
+            for (const ticker in etfs) {
+                const etf = etfs[ticker];
+                try {
+                    let priceData;
+                    if (etf.market === 'KR') {
+                        priceData = await fetchKrPrice(ticker);
+                    } else {
+                        priceData = await fetchUsPrice(ticker);
+                    }
+                    if (priceData) {
+                        PRICES[ticker] = {
+                            ...PRICES[ticker],
+                            price: priceData.price,
+                            prev: priceData.prev,
+                            name: priceData.name || PRICES[ticker]?.name || ticker
+                        };
+                    }
+                } catch (e) {
+                    console.error(`실시간 가격 업데이트 실패 (${ticker}):`, e);
+                }
+            }
+            renderSummary();
+            renderEtfCards();
+            await redrawAllCharts();
+        }
+        
+        // Naver API
+        async function fetchKrPrice(code) {
+            const url = `https://m.stock.naver.com/api/stock/${code}/integration`;
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+                    'Referer': 'https://m.stock.naver.com/'
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            
+            const etf = data.etfTabInfo || {};
+            const pi = etf.priceInfo || {};
+            const price = pi.closePrice || pi.openPrice;
+            const prevDiff = pi.compareToPreviousClosePrice || 0;
+            const prev = price ? price - prevDiff : price;
+            
+            return {
+                price: price || 0,
+                prev: prev || price || 0,
+                name: etf.etfName || data.stockInfo?.stockName || ''
+            };
+        }
+        
+        // Yahoo Finance API
+        async function fetchUsPrice(symbol) {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const meta = data.chart.result[0].meta;
+            
+            return {
+                price: meta.regularMarketPrice || meta.previousClose || 0,
+                prev: meta.chartPreviousClose || meta.previousClose || 0,
+                name: meta.longName || symbol
+            };
+        }
+        
+        // 기간 선택 변경
+        function updateChart(ticker, range) {
+            event.target.parentElement.querySelectorAll('.btn-period').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            chartRanges[ticker] = range;
+            
+            renderChartWithChartJs(ticker, range).catch(e => console.error('차트 업데이트 실패:', e));
+        }
+        
+        // 차트 재렌더링
+        async function redrawAllCharts() {
+            for (const ticker in chartInstances) {
+                const range = chartRanges[ticker] || '1d';
+                await renderChartWithChartJs(ticker, range);
+            }
+        }
+        
+        // 거래 모달
+        function openTradeModal(ticker) {
+            currentTradeEtf = ticker;
+            currentTradeType = 'buy';
+            document.getElementById('tradeModal').classList.add('active');
+            document.querySelectorAll('[data-type]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector('[data-type="buy"]').classList.add('active');
+            setTradeDate();
+        }
+        
+        function closeTradeModal() {
+            document.getElementById('tradeModal').classList.remove('active');
+            document.getElementById('tradePrice').value = '';
+            document.getElementById('tradeQty').value = '';
+        }
+        
+        function switchTradeType(type) {
+            currentTradeType = type;
+            document.querySelectorAll('[data-type]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+        
+        function setTradeDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('tradeDate').value = today;
+        }
+        
+        function updatePreview() {
+            const price = parseFloat(document.getElementById('tradePrice').value) || 0;
+            const qty = parseInt(document.getElementById('tradeQty').value) || 0;
+            const amount = price * qty;
+            
+            const metrics = calculateMetrics(currentTradeEtf);
+            const newQty = currentTradeType === 'buy' 
+                ? metrics.holdingQty + qty 
+                : Math.max(metrics.holdingQty - qty, 0);
+            
+            const preview = currentTradeType === 'buy'
+                ? `${qty}주 매수 시: 총 ${newQty}주 보유, 총 매입액 +₩${amount.toLocaleString('ko-KR', {maximumFractionDigits: 0})}`
+                : `${qty}주 매도 시: 총 ${newQty}주 보유, 수익 ₩${amount.toLocaleString('ko-KR', {maximumFractionDigits: 0})}`;
+            
+            document.getElementById('tradePreview').textContent = preview;
+        }
+        
+        function confirmTrade() {
+            const price = parseFloat(document.getElementById('tradePrice').value);
+            const qty = parseInt(document.getElementById('tradeQty').value);
+            const date = document.getElementById('tradeDate').value;
+            
+            if (!price || !qty || !date) {
+                showToast('모든 필드를 입력해주세요', 'error');
+                return;
+            }
+            
+            if (!etfs[currentTradeEtf].trades) {
+                etfs[currentTradeEtf].trades = [];
+            }
+            
+            etfs[currentTradeEtf].trades.push({
+                type: currentTradeType,
+                price,
+                qty,
+                date
+            });
+            
+            saveEtfsToLocalStorage();
+            renderSummary();
+            renderEtfCards();
+            closeTradeModal();
+            showToast('거래가 추가되었습니다', 'success');
+        }
+        
+        // ETF 추가 모달
+        function openAddEtfModal() {
+            document.getElementById('addEtfModal').classList.add('active');
+            document.getElementById('etfInputsContainer').innerHTML = '';
+            addEtfInputField();
+        }
+        
+        function addEtfInputField() {
+            const container = document.getElementById('etfInputsContainer');
+            const count = container.children.length + 1;
+            
+            const field = document.createElement('div');
+            field.className = 'etf-input-field';
+            field.innerHTML = `
+                <div class="etf-input-field-header">
+                    <span class="etf-input-field-title">ETF #${count}</span>
+                    <button class="etf-input-field-delete" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+                <div class="etf-input-row">
+                    <input type="text" class="form-input etf-name-input" placeholder="이름" style="grid-column: 1/3;">
+                </div>
+                <div class="etf-input-row">
+                    <input type="text" class="form-input etf-ticker-input" placeholder="티커 (예: 367760)">
+                    <select class="form-input etf-market-input">
+                        <option value="KR">국내</option>
+                        <option value="US">해외</option>
+                    </select>
+                </div>
+                <div class="etf-input-row">
+                    <input type="number" class="form-input etf-price-input" placeholder="초기 단가" step="0.01">
+                    <input type="number" class="form-input etf-qty-input" placeholder="초기 수량" step="1">
+                </div>
+            `;
+            
+            container.appendChild(field);
+        }
+        
+        function confirmAddMultipleEtf() {
+            const fields = document.querySelectorAll('.etf-input-field');
+            let hasError = false;
+            const newEtfs = [];
+            
+            fields.forEach((field, idx) => {
+                const name = field.querySelector('.etf-name-input').value.trim();
+                const ticker = field.querySelector('.etf-ticker-input').value.trim().toUpperCase();
+                const market = field.querySelector('.etf-market-input').value;
+                const initPrice = parseFloat(field.querySelector('.etf-price-input').value) || 0;
+                const initQty = parseInt(field.querySelector('.etf-qty-input').value) || 0;
+                
+                if (!name || !ticker || !initPrice || !initQty) {
+                    showToast(`ETF #${idx + 1}: 모든 필드를 입력해주세요`, 'error');
+                    hasError = true;
+                    return;
+                }
+                
+                if (etfs[ticker]) {
+                    showToast(`${ticker}: 이미 존재하는 ETF입니다`, 'error');
+                    hasError = true;
+                    return;
+                }
+                
+                newEtfs.push({
+                    ticker,
+                    name,
+                    market,
+                    initPrice,
+                    initQty
+                });
+            });
+            
+            if (hasError || newEtfs.length === 0) {
+                return;
+            }
+            
+            newEtfs.forEach(item => {
+                etfs[item.ticker] = {
+                    name: item.name,
+                    market: item.market,
+                    initPrice: item.initPrice,
+                    initQty: item.initQty,
+                    trades: []
+                };
+            });
+            
+            saveEtfsToLocalStorage();
+            renderSummary();
+            renderEtfCards();
+            initAllCharts();
+            closeAddEtfModal();
+            showToast(`${newEtfs.length}개 ETF가 추가되었습니다`, 'success');
+        }
+        
+        function closeAddEtfModal() {
+            document.getElementById('addEtfModal').classList.remove('active');
+            document.getElementById('etfInputsContainer').innerHTML = '';
+        }
+        
+        function deleteEtf(ticker) {
+            if (confirm(`${ticker}를 삭제하시겠습니까?`)) {
+                delete etfs[ticker];
+                if (chartInstances[ticker]) {
+                    chartInstances[ticker].destroy();
+                    delete chartInstances[ticker];
+                }
+                saveEtfsToLocalStorage();
+                renderSummary();
+                renderEtfCards();
+                showToast('ETF가 삭제되었습니다', 'success');
+            }
+        }
+        
+        function deleteTrade(ticker, idx) {
+            if (confirm('이 거래를 삭제하시겠습니까?')) {
+                etfs[ticker].trades.splice(idx, 1);
+                saveEtfsToLocalStorage();
+                renderSummary();
+                renderEtfCards();
+                showToast('거래가 삭제되었습니다', 'success');
+            }
+        }
+        
+        // Toast 알림
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+        
+        // 앱 초기화 및 실시간 업데이트
+        init();
+        
+        setInterval(async () => {
+            await fetchRealtimePrices();
+        }, 30000);
+    </script>
+</body>
+</html>
