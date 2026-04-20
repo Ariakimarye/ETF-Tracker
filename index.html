@@ -744,7 +744,7 @@
             setTradeDate();
         }
         
-        // prices.json 로드
+        // prices.json 로드 (초기화용)
         async function loadPrices() {
             try {
                 const res = await fetch(PRICES_URL);
@@ -753,6 +753,74 @@
             } catch (e) {
                 console.error('prices.json 로드 실패:', e);
             }
+        }
+        
+        // 실시간 가격 업데이트 (Naver API + Yahoo Finance)
+        async function fetchRealtimePrices() {
+            for (const ticker in etfs) {
+                const etf = etfs[ticker];
+                try {
+                    let priceData;
+                    if (etf.market === 'KR') {
+                        priceData = await fetchKrPrice(ticker);
+                    } else {
+                        priceData = await fetchUsPrice(ticker);
+                    }
+                    if (priceData) {
+                        PRICES[ticker] = {
+                            ...PRICES[ticker],
+                            price: priceData.price,
+                            prev: priceData.prev,
+                            name: priceData.name || PRICES[ticker]?.name || ticker
+                        };
+                    }
+                } catch (e) {
+                    console.error(`실시간 가격 업데이트 실패 (${ticker}):`, e);
+                }
+            }
+            // 가격 업데이트 완료 후 UI 새로고침
+            renderSummary();
+            renderEtfCards();
+        }
+        
+        // Naver API에서 한국 ETF 가격 가져오기
+        async function fetchKrPrice(code) {
+            const url = `https://m.stock.naver.com/api/stock/${code}/integration`;
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+                    'Referer': 'https://m.stock.naver.com/'
+                }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            
+            const etf = data.etfTabInfo || {};
+            const pi = etf.priceInfo || {};
+            const price = pi.closePrice || pi.openPrice;
+            const prevDiff = pi.compareToPreviousClosePrice || 0;
+            const prev = price ? price - prevDiff : price;
+            
+            return {
+                price: price || 0,
+                prev: prev || price || 0,
+                name: etf.etfName || data.stockInfo?.stockName || ''
+            };
+        }
+        
+        // Yahoo Finance에서 미국 주식/ETF 가격 가져오기
+        async function fetchUsPrice(symbol) {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const meta = data.chart.result[0].meta;
+            
+            return {
+                price: meta.regularMarketPrice || meta.previousClose || 0,
+                prev: meta.chartPreviousClose || meta.previousClose || 0,
+                name: meta.longName || symbol
+            };
         }
         
         // localStorage에서 ETF 목록 불러오기
@@ -1027,21 +1095,23 @@
             return Math.max(qty, 0);
         }
         
-        // TradingView iframe 차트 초기화
+        // 차트 초기화: 국내 ETF는 다음금융, 해외는 TradingView
         function initChart(ticker, range = '1d') {
             const etf = etfs[ticker];
-            let symbol;
+            const iframe = document.getElementById(`chart-${ticker}`);
+            
+            if (!iframe) return;
             
             if (etf.market === 'KR') {
-                symbol = `KRX:${ticker}`;
+                // 국내 ETF: 다음금융 차트
+                iframe.src = `https://finance.daum.net/quotes/A${ticker}`;
+                console.log(`Daum Finance chart loaded for ${ticker}`);
             } else {
-                symbol = `NASDAQ:${ticker}`;
-            }
-            
-            const iframe = document.getElementById(`chart-${ticker}`);
-            if (iframe) {
-                const url = `https://www.tradingview.com/widgetembed/?symbol=${symbol}&interval=D&theme=light&style=1&locale=kr&range=${range}&hide_side_toolbar=1&allow_symbol_change=0&hide_legend=0&hide_volume=0`;
+                // 해외 ETF: TradingView
+                let symbol = ticker;
+                const url = `https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=D&theme=light&style=1&locale=kr&range=${range}&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`;
                 iframe.src = url;
+                console.log(`TradingView chart loaded for ${ticker}:`, url);
             }
         }
         
@@ -1282,12 +1352,10 @@
         // 앱 초기화
         init();
         
-        // 1분마다 가격 업데이트
+        // 30초마다 실시간 가격 업데이트 (자동 반영)
         setInterval(async () => {
-            await loadPrices();
-            renderSummary();
-            renderEtfCards();
-        }, 60000);
+            await fetchRealtimePrices();
+        }, 30000);
     </script>
 </body>
 </html>

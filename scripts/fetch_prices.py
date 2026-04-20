@@ -32,6 +32,15 @@ def fetch_us(symbol):
     prev = meta.get("chartPreviousClose") or meta.get("previousClose") or price
     return {"price": price, "prev": prev, "name": meta.get("longName") or symbol, "currency": "USD", "ok": bool(price)}
 
+# 기존 prices.json 로드
+prices_file = "prices.json"
+if os.path.exists(prices_file):
+    with open(prices_file, 'r', encoding='utf-8') as f:
+        existing_data = json.load(f)
+else:
+    existing_data = {"updated": "", "historic": []}
+
+# 새 데이터 수집
 tickers = json.load(open("tickers.json"))
 results = {}
 for code, info in tickers.items():
@@ -41,6 +50,26 @@ for code, info in tickers.items():
         res = {"ok": False, "error": str(e)}
     results[code] = {**info, **res}
 
-output = {"updated": datetime.now(KST).strftime("%Y-%m-%d %H:%M KST"), "prices": results}
-json.dump(output, open("prices.json","w"), ensure_ascii=False, indent=2)
-print(f"Done: {len(results)} tickers updated")
+# historic 배열에 추가
+now = datetime.now(KST)
+new_entry = {
+    "date": now.strftime("%Y-%m-%d"),
+    "time": now.strftime("%H:%M"),
+    "prices": results
+}
+
+if "historic" not in existing_data:
+    existing_data["historic"] = []
+
+existing_data["historic"].append(new_entry)
+existing_data["updated"] = now.strftime("%Y-%m-%d %H:%M KST")
+
+# 저장 (최근 365개 항목만 유지해서 파일 크기 관리)
+if len(existing_data["historic"]) > 365:
+    existing_data["historic"] = existing_data["historic"][-365:]
+
+with open(prices_file, 'w', encoding='utf-8') as f:
+    json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+print(f"Done: {len(results)} tickers updated. Historic entries: {len(existing_data['historic'])}")
+
