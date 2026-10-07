@@ -1,28 +1,6 @@
 {
-  "updated": "2026-10-07 11:56 KST",
+  "updated": "2026-10-07 18:34 KST",
   "historic": [
-    {
-      "date": "2026-04-29",
-      "time": "22:10",
-      "prices": {
-        "367760": {
-          "market": "KR",
-          "price": null,
-          "prev": null,
-          "name": "",
-          "currency": "KRW",
-          "ok": false
-        },
-        "SPY": {
-          "market": "US",
-          "price": 711.69,
-          "prev": 713.94,
-          "name": "State Street SPDR S&P 500 ETF Trust",
-          "currency": "USD",
-          "ok": true
-        }
-      }
-    },
     {
       "date": "2026-04-30",
       "time": "16:54",
@@ -8012,6 +7990,28 @@
     {
       "date": "2026-10-07",
       "time": "11:56",
+      "prices": {
+        "367760": {
+          "market": "KR",
+          "price": null,
+          "prev": null,
+          "name": "",
+          "currency": "KRW",
+          "ok": false
+        },
+        "SPY": {
+          "market": "US",
+          "price": 779.09,
+          "prev": 769.64,
+          "name": "State Street SPDR S&P 500 ETF Trust",
+          "currency": "USD",
+          "ok": true
+        }
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "time": "18:34",
       "prices": {
         "367760": {
           "market": "KR",
